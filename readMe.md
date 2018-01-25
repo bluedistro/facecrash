@@ -14,4 +14,4 @@ HOW TO TEST
     * dir_name: directory to hold input and output files (type -> text)
 6. Now, make a POST request to the API which will be running on port:8080 by default
    to test it out.
-   The full url is: http://127.0.0.1/face_mash
+   The full url is: http://127.0.0.1:8080/face_mash
