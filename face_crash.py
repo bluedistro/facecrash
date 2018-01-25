@@ -18,9 +18,12 @@
 #     OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
 #     USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-import cv2
-import dlib
-import numpy
+try:
+    import cv2
+    import dlib
+    import numpy
+except ImportError as e:
+    print(str(e))
 import os
 
 
@@ -32,10 +35,9 @@ class NoFaces(Exception):
     pass
 
 
-class crash:
+class Crash:
 
     def __init__(self):
-
 
         self.PREDICTOR_PATH = 'shape_predictor_68_face_landmarks.dat'
         self.SCALE_FACTOR = 1
@@ -54,7 +56,8 @@ class crash:
         self.ALIGN_POINTS = (self.LEFT_BROW_POINTS + self.RIGHT_EYE_POINTS + self.RIGHT_EYE_POINTS +
                              self.RIGHT_BROW_POINTS + self.NOSE_POINTS + self.MOUTH_POINTS)
 
-        # Points from the second image to overlay on the first. The convex hull of each element will be overlaid
+        # Points from the second image to overlay on the first.
+        #  The convex hull of each element will be overlaid
         self.OVERLAY_POINTS =  [
             self.LEFT_EYE_POINTS + self.RIGHT_EYE_POINTS + self.LEFT_BROW_POINTS + self.RIGHT_BROW_POINTS,
             self.NOSE_POINTS + self.MOUTH_POINTS,
@@ -77,8 +80,8 @@ class crash:
 
         return numpy.matrix([[p.x, p.y] for p in self.predictor(im, rects[0]).parts()])
 
-
-    def annotate_landmarks(self, im, landmarks):
+    @staticmethod
+    def annotate_landmarks(im, landmarks):
         im = im.copy()
         for idx, point in enumerate(landmarks):
             pos = (point[0, 0], point[0, 1])
@@ -90,8 +93,8 @@ class crash:
             cv2.circle(im, pos, 3, color=(0, 255, 255))
         return im
 
-
-    def draw_convex_hull(self, im, points, color):
+    @staticmethod
+    def draw_convex_hull(im, points, color):
         points = cv2.convexHull(points)
         cv2.fillConvexPoly(im, points, color=color)
 
@@ -110,8 +113,8 @@ class crash:
 
         return im
 
-
-    def transformation_from_points(self, points1, points2):
+    @staticmethod
+    def transformation_from_points(points1, points2):
 
         points1 = points1.astype(numpy.float64)
         points2 = points2.astype(numpy.float64)
@@ -136,16 +139,16 @@ class crash:
                              numpy.matrix([0., 0., 1.])])
 
     def read_im_and_landmarks(self, fname):
-        im =cv2.imread(fname, cv2.IMREAD_COLOR)
+        im = cv2.imread(fname, cv2.IMREAD_COLOR)
         im = cv2.resize(im, (im.shape[1] * self.SCALE_FACTOR,
                              im.shape[0] * self.SCALE_FACTOR))
 
-        s = self.get_landmarks(im)
+        landmarks = self.get_landmarks(im)
 
-        return im, s
+        return im, landmarks
 
-
-    def warp_im(self, im, M, dshape):
+    @staticmethod
+    def warp_im(im, M, dshape):
         output_im = numpy.zeros(dshape, dtype=im.dtype)
         cv2.warpAffine(im,
                        M[:2],
@@ -159,8 +162,7 @@ class crash:
     def correct_colours(self, im1, im2, landmarks1):
         blur_amount = self.COLOUR_CORRECT_BLUR_FRAC * numpy.linalg.norm(
             numpy.mean(landmarks1[self.LEFT_EYE_POINTS], axis=0) -
-            numpy.mean(landmarks1[self.RIGHT_EYE_POINTS], axis=0)
-        )
+            numpy.mean(landmarks1[self.RIGHT_EYE_POINTS], axis=0))
 
         blur_amount = int(blur_amount)
 
@@ -169,18 +171,15 @@ class crash:
 
         im1_blur = cv2.GaussianBlur(im1, (blur_amount, blur_amount), 0)
         im2_blur = cv2.GaussianBlur(im2, (blur_amount, blur_amount), 0)
-
         # Avoid divide-by-zero
         im2_blur += (128 * (im2_blur <= 1.0)).astype(im2_blur.dtype)
 
         return (im2.astype(numpy.float64) * im1_blur.astype(numpy.float64) /
                 im2_blur.astype(numpy.float64))
 
-
     def implement(self, face_frame_image, face_mask_image, output_name, dir_name):
 
         '''
-
         :param face_frame_image: the frame image on which the mask image will be laid
         :param face_mask_image:  the mask image to be laid on the frame image
         :param output_name: preferred nomenclature for output image file
@@ -192,7 +191,7 @@ class crash:
         im2, landmarks2 = self.read_im_and_landmarks(face_mask_image)
 
         M = self.transformation_from_points(landmarks1[self.ALIGN_POINTS],
-                                       landmarks2[self.ALIGN_POINTS])
+                                            landmarks2[self.ALIGN_POINTS])
 
         mask = self.get_face_mask(im2, landmarks2)
         warped_mask = self.warp_im(mask, M, im1.shape)
@@ -200,11 +199,9 @@ class crash:
                                   axis=0)
 
         warped_im2 = self.warp_im(im2, M, im1.shape)
-
         warped_corrected_im2 = self.correct_colours(im1, warped_im2, landmarks1)
 
         output_im = im1 * (1.0 - combined_mask) + warped_corrected_im2 * combined_mask
-        path_name = dir_name
         output_name = str(output_name) + '.jpg'
-        output = os.path.join(path_name, output_name)
+        output = os.path.join(dir_name, output_name)
         cv2.imwrite(output, output_im)
